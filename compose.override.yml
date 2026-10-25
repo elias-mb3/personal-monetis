@@ -1,0 +1,13 @@
+# Local override: build images from this fork instead of pulling upstream ghcr images.
+services:
+  migrator:
+    image: openmonetis-local/openmonetis-migrator:local
+    build: { context: ., target: migrator }
+  api:
+    image: openmonetis-local/openmonetis-api:local
+    build: { context: ., target: api }
+  recurring-worker:
+    image: openmonetis-local/openmonetis-api:local
+  web:
+    image: openmonetis-local/openmonetis-web:local
+    build: { context: ., target: web }

@@ -1,0 +1,10 @@
+{
+  "name": "openmonetis-dev",
+  "image": "docker.io/library/node:22.16.0-bookworm",
+  "containerUser": "node",
+  "remoteUser": "node",
+  "containerEnv": { "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0" },
+  "runArgs": ["--userns=keep-id", "--network=host", "--env-file=.env"],
+  "postCreateCommand": "corepack pnpm install --frozen-lockfile",
+  "customizations": { "vscode": { "extensions": ["biomejs.biome"] } }
+}
