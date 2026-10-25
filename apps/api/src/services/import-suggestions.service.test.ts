@@ -5,7 +5,7 @@ import { createImportSuggestionsService } from "./import-suggestions.service";
 const transport = "11111111-1111-4111-8111-111111111111";
 const food = "22222222-2222-4222-8222-222222222222";
 
-function createService(llmItems: Array<{ index: number; category: string; confidence: number }>) {
+function createService(llmCategories: string[]) {
   const prompts: string[] = [];
   const service = createImportSuggestionsService(
     {
@@ -24,7 +24,7 @@ function createService(llmItems: Array<{ index: number; category: string; confid
       model: "fake",
       async generateJson<T>(_system: string, prompt: string) {
         prompts.push(prompt);
-        return { items: llmItems } as T;
+        return { categories: llmCategories } as T;
       },
     },
   );
@@ -38,11 +38,8 @@ const row = (name: string, amount = 10) => ({
   purchaseDate: "2026-11-15",
 });
 
-test("history matches skip the model and low-confidence answers are dropped", async () => {
-  const { service, prompts } = createService([
-    { index: 1, category: "c2", confidence: 0.9 },
-    { index: 2, category: "c1", confidence: 0.1 },
-  ]);
+test("history matches skip the model and codes map back in prompt order", async () => {
+  const { service, prompts } = createService(["c2", "none"]);
   const result = await service.suggestCategories(
     [row("Uber *Trip 8812"), row("Outback Steakhouse"), row("Loja XPTO")],
     "user",
@@ -56,7 +53,8 @@ test("history matches skip the model and low-confidence answers are dropped", as
     ],
   );
   assert.equal(prompts.length, 1);
-  assert.doesNotMatch(prompts[0] as string, /0\. \[despesa\]/);
+  assert.match(prompts[0] as string, /1\. \[despesa\] "Outback Steakhouse"/);
+  assert.equal(result[1]?.confidence, null);
 });
 
 test("possible duplicates require same amount, close date and similar name", async () => {

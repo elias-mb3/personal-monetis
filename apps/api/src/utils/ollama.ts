@@ -10,6 +10,8 @@ export function createOllamaClient(options: {
   baseUrl: string;
   model: string;
   timeoutMs?: number;
+  /** CPU threads for inference; Ollama under-detects them inside containers. */
+  numThread?: number;
   fetchImpl?: typeof fetch;
 }): LocalLlm {
   const baseUrl = options.baseUrl.replace(/\/+$/, "");
@@ -20,13 +22,17 @@ export function createOllamaClient(options: {
       const response = await fetchImpl(`${baseUrl}/api/chat`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        signal: AbortSignal.timeout(options.timeoutMs ?? 180_000),
+        signal: AbortSignal.timeout(options.timeoutMs ?? 300_000),
         body: JSON.stringify({
           model: options.model,
           stream: false,
           format: schema,
           keep_alive: "15m",
-          options: { temperature: 0, num_ctx: 8192 },
+          options: {
+            temperature: 0,
+            num_ctx: 8192,
+            ...(options.numThread ? { num_thread: options.numThread } : {}),
+          },
           messages: [
             { role: "system", content: system },
             { role: "user", content: prompt },
@@ -47,5 +53,6 @@ export function createOllamaClientFromEnv(env = process.env): LocalLlm | null {
     baseUrl,
     model: env.OLLAMA_MODEL?.trim() || "qwen2.5:3b",
     timeoutMs: Number(env.OLLAMA_TIMEOUT_MS) || undefined,
+    numThread: Number(env.OLLAMA_NUM_THREAD) || undefined,
   });
 }

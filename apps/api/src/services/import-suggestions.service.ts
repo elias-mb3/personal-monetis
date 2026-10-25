@@ -24,15 +24,14 @@ export type ImportSuggestion = {
 type SuggestionRow = Pick<ImportedTransaction, "name" | "type" | "amount" | "purchaseDate">;
 
 const historyThreshold = 0.82;
-const aiMinimumConfidence = 0.35;
-const aiBatchSize = 20;
+const aiBatchSize = 10;
 
 const categorizeSystemPrompt = [
   "Você classifica lançamentos financeiros pessoais brasileiros (cartão de crédito, conta e vale refeição/alimentação).",
   "Para cada lançamento escolha o código da categoria mais provável entre as categorias fornecidas.",
   "Use os exemplos do histórico do usuário como principal referência: o mesmo estabelecimento deve receber a mesma categoria.",
-  'Se não houver categoria adequada, responda "none". Informe a confiança entre 0 e 1.',
-  "Responda somente com o JSON solicitado.",
+  'Se não houver categoria adequada, use "none".',
+  'Responda somente com o JSON solicitado: em "categories", um código por lançamento, na mesma ordem.',
 ].join(" ");
 
 const extractSystemPrompt = [
@@ -107,48 +106,37 @@ export function createImportSuggestionsService(
         ),
         examples.length ? `Exemplos do histórico do usuário:\n${examples.join("\n")}` : "",
         "Lançamentos para classificar:",
-        ...batch.map((index) => {
+        ...batch.map((index, position) => {
           const row = rows[index] as SuggestionRow;
-          return `${index}. [${row.type === "income" ? "receita" : "despesa"}] "${row.name}" R$ ${row.amount.toFixed(2)}`;
+          return `${position + 1}. [${row.type === "income" ? "receita" : "despesa"}] "${row.name}" R$ ${row.amount.toFixed(2)}`;
         }),
       ]
         .filter(Boolean)
         .join("\n\n");
       try {
-        const result = await llm.generateJson<{
-          items?: Array<{ index: number; category: string; confidence: number }>;
-        }>(categorizeSystemPrompt, prompt, {
-          type: "object",
-          properties: {
-            items: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  index: { type: "integer", enum: batch },
-                  category: { type: "string", enum: [...codes.map((c) => c.code), "none"] },
-                  confidence: { type: "number" },
-                },
-                required: ["index", "category", "confidence"],
+        // Only category codes are generated: on CPU, output tokens dominate the latency.
+        const result = await llm.generateJson<{ categories?: string[] }>(
+          categorizeSystemPrompt,
+          prompt,
+          {
+            type: "object",
+            properties: {
+              categories: {
+                type: "array",
+                minItems: batch.length,
+                maxItems: batch.length,
+                items: { type: "string", enum: [...codes.map((c) => c.code), "none"] },
               },
             },
+            required: ["categories"],
           },
-          required: ["items"],
+        );
+        batch.forEach((index, position) => {
+          const row = rows[index];
+          const category = idsByCode.get(result.categories?.[position] ?? "");
+          if (!row || !category || category.type !== row.type) return;
+          suggestions[index] = { categoryId: category.id, source: "ai", confidence: null };
         });
-        for (const item of result.items ?? []) {
-          const row = rows[item.index];
-          const category = idsByCode.get(item.category);
-          const confidence = Math.min(1, Math.max(0, Number(item.confidence) || 0));
-          if (!row || !batch.includes(item.index) || !category || category.type !== row.type) {
-            continue;
-          }
-          if (confidence < aiMinimumConfidence) continue;
-          suggestions[item.index] = {
-            categoryId: category.id,
-            source: "ai",
-            confidence: round(confidence),
-          };
-        }
       } catch (error) {
         console.warn(
           "Local AI categorization failed",
