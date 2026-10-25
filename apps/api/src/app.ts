@@ -28,6 +28,7 @@ import { dueDateRulesRepository } from "./repositories/due-date-rules.repository
 import { establishmentsRepository } from "./repositories/establishments.repository";
 import { externalExpensesRepository } from "./repositories/external-expenses.repository";
 import { goalsRepository } from "./repositories/goals.repository";
+import * as importSuggestionsRepository from "./repositories/import-suggestions.repository";
 import { inboxRepository } from "./repositories/inbox.repository";
 import { inboxRulesRepository } from "./repositories/inbox-rules.repository";
 import { installmentsRepository } from "./repositories/installments.repository";
@@ -102,6 +103,7 @@ import {
   synchronizeRecurringExternalExpenses,
 } from "./services/external-expenses.service";
 import { createGoalsService } from "./services/goals.service";
+import { createImportSuggestionsService } from "./services/import-suggestions.service";
 import { createInboxService } from "./services/inbox.service";
 import { createInboxRulesService } from "./services/inbox-rules.service";
 import { createInstallmentsService } from "./services/installments.service";
@@ -121,6 +123,7 @@ import { createTransactionsService } from "./services/transactions.service";
 import type { ApiVariables } from "./types/context";
 import { assertProductionSecret, getRequiredProductionEnv, parseCsvEnv } from "./utils/env";
 import { logoDevGateway } from "./utils/logo-dev";
+import { createOllamaClientFromEnv } from "./utils/ollama";
 import { validationHook } from "./utils/openapi";
 import { attachmentStorage } from "./utils/storage";
 
@@ -174,6 +177,10 @@ const transactionsService = createTransactionsService(
   {
     ...transactionsRepository,
     dueDateRules: dueDateRulesRepository,
+    importSuggestions: createImportSuggestionsService(
+      importSuggestionsRepository,
+      createOllamaClientFromEnv(),
+    ),
     transitionRecurringRuleForUser,
     findAccountByIdForUser,
     findAdminPersonByUserId,

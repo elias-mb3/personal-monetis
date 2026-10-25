@@ -55,6 +55,15 @@ export function TransactionImportReviewRow({
             Já importado
           </Badge>
         ) : null}
+        {row.isPossibleDuplicate ? (
+          <Badge
+            className="mt-1"
+            title="Mesmo valor e descrição parecida perto desta data"
+            variant="outline"
+          >
+            Possível duplicado
+          </Badge>
+        ) : null}
       </TableCell>
       <TableCell>
         <RowSelect
@@ -71,6 +80,7 @@ export function TransactionImportReviewRow({
           onChange={(categoryId) => updateRow(setRows, index, { categoryId })}
           value={row.categoryId}
         />
+        <SuggestionBadge row={row} />
       </TableCell>
       <TableCell>
         <TransactionTypeBadge type={row.type} />
@@ -84,5 +94,30 @@ export function TransactionImportReviewRow({
         {formatCurrency(row.type === "expense" ? -row.amount : row.amount)}
       </TableCell>
     </TableRow>
+  );
+}
+
+const suggestionLabels = { mapping: "Regra", history: "Histórico", ai: "IA local" } as const;
+
+function SuggestionBadge({ row }: { row: ReviewRow }) {
+  if (!row.suggestionSource || row.categoryId !== row.suggestedCategoryId) return null;
+  const confidence =
+    row.suggestionSource === "mapping" || row.suggestionConfidence === null
+      ? ""
+      : ` ${Math.round(row.suggestionConfidence * 100)}%`;
+  return (
+    <Badge
+      className={cn(
+        "mt-1",
+        row.suggestionSource === "ai" &&
+          (row.suggestionConfidence ?? 0) < 0.7 &&
+          "border-warning text-warning",
+      )}
+      title="Origem da categoria sugerida"
+      variant="outline"
+    >
+      {suggestionLabels[row.suggestionSource]}
+      {confidence}
+    </Badge>
   );
 }

@@ -48,7 +48,9 @@ import {
   normalizeImportedDescriptionKey,
   normalizeImportedType,
   normalizeTransactionAmount,
+  parseCsvStatement,
   parseOfxStatement,
+  parsePluxeeStatementText,
   previewInstallmentOptions,
   projectTransactionAllocations,
   resolveEditedTransactionPeriod,
@@ -80,8 +82,10 @@ import type {
   TransactionWithRelations,
 } from "../repositories/transactions.repository";
 import { badRequest, conflict, notFound } from "../utils/errors";
+import { extractPdfText } from "../utils/pdf-text";
 import { createTransactionsExport } from "../utils/transactions-export";
 import type { AttachmentsService } from "./attachments.service";
+import type { ImportSuggestionsService } from "./import-suggestions.service";
 
 type TransactionsRepositoryModule = typeof import("../repositories/transactions.repository");
 
@@ -128,6 +132,10 @@ export type TransactionsServiceDependencies = Pick<
   | "updateTransferPairForUser"
 > & {
   dueDateRules?: DueDateRulesReader;
+  importSuggestions?: Pick<
+    ImportSuggestionsService,
+    "suggestCategories" | "findPossibleDuplicates" | "extractTransactionsFromText"
+  >;
   transitionRecurringRuleForUser: typeof import("../repositories/recurring-transactions.repository").transitionRecurringRuleForUser;
   listTagsByIdsForUser?: (ids: string[], userId: string) => Promise<Array<{ id: string }>>;
   getAccountBalanceSnapshotForUser: (
@@ -257,6 +265,10 @@ export function createTransactionsService(
     synchronize(ownerUserId: string, period: string): Promise<unknown>;
   } = { synchronize: async () => undefined },
 ) {
+  const importSuggestions =
+    typeof dependencies.importSuggestions?.suggestCategories === "function"
+      ? dependencies.importSuggestions
+      : null;
   const dueDateRulesReader = dependencies.dueDateRules?.listVersions
     ? dependencies.dueDateRules
     : emptyDueDateRulesReader;
@@ -679,6 +691,13 @@ export function createTransactionsService(
         statement = parseOfxStatement(new TextDecoder("windows-1252").decode(content));
       } else if (extension === "xlsx") {
         statement = await parseSpreadsheetStatement(content);
+      } else if (extension === "csv") {
+        statement = parseCsvStatement(
+          decodeTextStatement(content),
+          `csv:${createHash("sha256").update(content).digest("hex")}`,
+        );
+      } else if (extension === "pdf") {
+        statement = await parsePdfStatement(content);
       } else {
         throw badRequest("Statement format is not supported", "IMPORT_FORMAT_NOT_SUPPORTED");
       }
@@ -710,22 +729,66 @@ export function createTransactionsService(
       categoryMappings.map((mapping) => [mapping.descriptionKey, mapping]),
     );
 
+    const mappedCategoryIds = statement.transactions.map((transaction) => {
+      const mapping = categoryMappingsByDescription.get(
+        normalizeImportedDescriptionKey(transaction.name),
+      );
+      return mapping?.categoryType === transaction.type ? (mapping.categoryId as string) : null;
+    });
+    const unmappedRows = statement.transactions.filter((_, index) => !mappedCategoryIds[index]);
+    const [aiSuggestions, possibleDuplicates] = await Promise.all([
+      importSuggestions?.suggestCategories(unmappedRows, userId) ?? [],
+      importSuggestions?.findPossibleDuplicates(statement.transactions, userId) ?? [],
+    ]);
+    let unmappedIndex = 0;
+
     return {
       sourceName: statement.sourceName,
       sourceFingerprint,
       accountNumber: statement.accountNumber,
       period: statement.period,
       isCreditCard: statement.isCreditCard,
-      transactions: statement.transactions.map((transaction) => ({
-        ...transaction,
-        isDuplicate: transaction.externalId ? duplicates.has(transaction.externalId) : false,
-        suggestedCategoryId:
-          categoryMappingsByDescription.get(normalizeImportedDescriptionKey(transaction.name))
-            ?.categoryType === transaction.type
-            ? (categoryMappingsByDescription.get(normalizeImportedDescriptionKey(transaction.name))
-                ?.categoryId as string)
-            : null,
-      })),
+      transactions: statement.transactions.map((transaction, index) => {
+        const isDuplicate = transaction.externalId ? duplicates.has(transaction.externalId) : false;
+        const mappedCategoryId = mappedCategoryIds[index] ?? null;
+        const suggestion = mappedCategoryId ? null : aiSuggestions[unmappedIndex++];
+        return {
+          ...transaction,
+          isDuplicate,
+          isPossibleDuplicate: !isDuplicate && Boolean(possibleDuplicates[index]),
+          suggestedCategoryId: mappedCategoryId ?? suggestion?.categoryId ?? null,
+          suggestionSource: mappedCategoryId ? ("mapping" as const) : (suggestion?.source ?? null),
+          suggestionConfidence: mappedCategoryId ? 1 : (suggestion?.confidence ?? null),
+        };
+      }),
+    };
+  }
+
+  function decodeTextStatement(content: Buffer) {
+    const utf8 = new TextDecoder("utf-8").decode(content);
+    return utf8.includes("\uFFFD") ? new TextDecoder("windows-1252").decode(content) : utf8;
+  }
+
+  async function parsePdfStatement(content: Buffer): Promise<ImportedStatement> {
+    const text = await extractPdfText(content);
+    if (/pluxee/i.test(text)) {
+      try {
+        return parsePluxeeStatementText(text);
+      } catch {
+        // Unknown Pluxee layout: fall back to the local model below.
+      }
+    }
+    const transactions = (await importSuggestions?.extractTransactionsFromText(text)) ?? [];
+    if (!transactions.length) {
+      throw badRequest("PDF statement could not be read", "IMPORT_PDF_NOT_SUPPORTED");
+    }
+    return {
+      sourceName: "Extrato em PDF",
+      sourceReference: `pdf:${createHash("sha256").update(content).digest("hex")}`,
+      accountNumber: null,
+      period: deriveImportedPeriod(transactions),
+      isCreditCard: false,
+      transactions,
     };
   }
 

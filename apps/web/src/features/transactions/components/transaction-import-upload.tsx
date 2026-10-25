@@ -36,7 +36,10 @@ export function TransactionImportUpload({
     <Card className="border" aria-labelledby="upload-title">
       <CardHeader className="border-b">
         <CardTitle id="upload-title">Selecione o extrato</CardTitle>
-        <CardDescription>Envie um arquivo OFX, QFX ou XLSX de até 5 MB.</CardDescription>
+        <CardDescription>
+          Envie um arquivo OFX, QFX, XLSX, CSV ou PDF de até 5 MB. As categorias são sugeridas pelo
+          seu histórico e pela IA local.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <Button
@@ -74,17 +77,17 @@ export function TransactionImportUpload({
             <span className="grid gap-1.5">
               <span className="font-medium text-base">
                 {isPreviewing
-                  ? "Lendo extrato..."
+                  ? "Lendo extrato e sugerindo categorias..."
                   : "Arraste o arquivo aqui ou clique para selecionar"}
               </span>
               <span className="font-normal text-muted-foreground text-sm">
-                Formatos aceitos: .ofx, .qfx e .xlsx
+                Formatos aceitos: .ofx, .qfx, .xlsx, .csv e .pdf
               </span>
             </span>
           </span>
         </Button>
         <input
-          accept=".ofx,.qfx,.xlsx"
+          accept=".ofx,.qfx,.xlsx,.csv,.pdf"
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];

@@ -556,7 +556,10 @@ export const TransactionImportPreviewOutputSchema = z
     transactions: z.array(
       ImportedTransactionRowSchema.extend({
         isDuplicate: z.boolean(),
+        isPossibleDuplicate: z.boolean(),
         suggestedCategoryId: z.string().uuid().nullable(),
+        suggestionSource: z.enum(["mapping", "history", "ai"]).nullable(),
+        suggestionConfidence: z.number().min(0).max(1).nullable(),
       }),
     ),
   })

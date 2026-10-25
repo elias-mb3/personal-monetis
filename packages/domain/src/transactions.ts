@@ -1047,3 +1047,204 @@ function addMonths(date: Date, months: number) {
 function clampDay(day: number, year: number, month: number) {
   return Math.min(day, createUtcDate(year, month + 1, 0).getUTCDate());
 }
+
+const portugueseMonths: Record<string, string> = {
+  janeiro: "01",
+  fevereiro: "02",
+  marco: "03",
+  abril: "04",
+  maio: "05",
+  junho: "06",
+  julho: "07",
+  agosto: "08",
+  setembro: "09",
+  outubro: "10",
+  novembro: "11",
+  dezembro: "12",
+};
+
+/** Removes accents, card noise (`*`, ids, installments, city suffixes) for fuzzy matching. */
+export function cleanImportedDescription(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\bparcela\s*\d+\s*(de|\/)\s*\d+\b/g, " ")
+    .replace(/\b\d+\s*\/\s*\d+\b/g, " ")
+    .replace(/^(pg|pag|mp|ifd|ec|pp|dl|ebn|htm|mercpago|pagseguro)\s*\*\s*/g, "")
+    .replace(/[^a-z\s]/g, " ")
+    .replace(/\b[a-z]\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Similarity in [0, 1] between two descriptions using character trigrams (Dice coefficient). */
+export function importedDescriptionSimilarity(left: string, right: string) {
+  const a = trigrams(cleanImportedDescription(left));
+  const b = trigrams(cleanImportedDescription(right));
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const gram of a) if (b.has(gram)) shared += 1;
+  return (2 * shared) / (a.size + b.size);
+}
+
+function trigrams(value: string) {
+  const padded = `  ${value} `;
+  const grams = new Set<string>();
+  for (let index = 0; index < padded.length - 2; index += 1)
+    grams.add(padded.slice(index, index + 3));
+  return grams;
+}
+
+export function parseCsvStatement(content: string, sourceReference: string): ImportedStatement {
+  const lines = content
+    .replace(/^﻿/, "")
+    .split(/\r?\n/)
+    .filter((line) => line.trim());
+  const header = lines[0];
+  if (!header || lines.length < 2) throw new Error("CSV has no rows");
+  const delimiter = [";", ",", "\t"].reduce((best, candidate) =>
+    header.split(candidate).length > header.split(best).length ? candidate : best,
+  );
+  const headers = splitCsvLine(header, delimiter).map(normalizeCsvHeader);
+  const findColumn = (names: string[]) => headers.findIndex((name) => names.includes(name));
+  const dateColumn = findColumn(["data", "date", "data compra", "data lancamento"]);
+  const nameColumn = findColumn([
+    "descricao",
+    "description",
+    "title",
+    "historico",
+    "estabelecimento",
+    "lancamento",
+  ]);
+  const amountColumn = findColumn(["valor", "amount", "valor r", "valor brl"]);
+  const typeColumn = findColumn(["tipo", "type"]);
+  const categoryColumn = findColumn(["categoria", "category"]);
+  if (dateColumn < 0 || nameColumn < 0 || amountColumn < 0) {
+    throw new Error("Required CSV columns not found");
+  }
+  // Nubank card exports use `date,title,amount` with purchases as positive values.
+  const isCreditCard = headers.includes("title") && typeColumn < 0;
+
+  const transactions = lines.slice(1).flatMap<ImportedTransaction>((line) => {
+    const cells = splitCsvLine(line, delimiter);
+    const rawAmount = cells[amountColumn]?.trim() ?? "";
+    const amount = normalizeImportedAmount(rawAmount);
+    const negative = /^-|-$|\(.*\)/.test(rawAmount.replace(/\s/g, ""));
+    const purchaseDate = parseCsvDate(cells[dateColumn] ?? "");
+    const name = (cells[nameColumn] ?? "").replace(/\s+/g, " ").trim().slice(0, 160);
+    if (!purchaseDate || !name || !amount) return [];
+    const signedAmount = isCreditCard ? (negative ? amount : -amount) : negative ? -amount : amount;
+    return [
+      {
+        externalId: null,
+        purchaseDate,
+        amount,
+        name,
+        type: normalizeImportedType(typeColumn >= 0 ? cells[typeColumn] : null, signedAmount),
+        categoryName: categoryColumn >= 0 ? cells[categoryColumn]?.trim() || null : null,
+      },
+    ];
+  });
+  if (!transactions.length) throw new Error("CSV has no valid transactions");
+
+  return {
+    sourceName: isCreditCard ? "Cartão (CSV)" : "Extrato (CSV)",
+    sourceReference,
+    accountNumber: null,
+    period: deriveImportedPeriod(transactions),
+    isCreditCard,
+    transactions,
+  };
+}
+
+function splitCsvLine(line: string, delimiter: string) {
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '"') {
+      if (quoted && line[index + 1] === '"') {
+        current += '"';
+        index += 1;
+      } else quoted = !quoted;
+    } else if (char === delimiter && !quoted) {
+      cells.push(current);
+      current = "";
+    } else current += char;
+  }
+  cells.push(current);
+  return cells;
+}
+
+function normalizeCsvHeader(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function parseCsvDate(value: string) {
+  const text = value.trim().replace(/^"|"$/g, "");
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const dmy = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!dmy) return null;
+  const year = dmy[3]?.length === 2 ? `20${dmy[3]}` : dmy[3];
+  return `${year}-${dmy[2]?.padStart(2, "0")}-${dmy[1]?.padStart(2, "0")}`;
+}
+
+/** Parses the text extracted from a Pluxee app statement PDF (Refeição/Alimentação). */
+export function parsePluxeeStatementText(text: string): ImportedStatement {
+  if (!/pluxee/i.test(text)) throw new Error("Not a Pluxee statement");
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const benefit = lines.find((line) => /^(Refeição|Alimentação)$/i.test(line)) ?? null;
+  const transactions: ImportedTransaction[] = [];
+  let currentDate: string | null = null;
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] as string;
+    const dateMatch = line
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .match(/^(\d{1,2}) de ([a-z]+)(?: de)? (\d{4})$|^(\d{1,2}) ([a-z]+) (\d{4})$/i);
+    if (dateMatch) {
+      const day = dateMatch[1] ?? dateMatch[4];
+      const month = portugueseMonths[(dateMatch[2] ?? dateMatch[5] ?? "").toLowerCase()];
+      const year = dateMatch[3] ?? dateMatch[6];
+      currentDate = month ? `${year}-${month}-${day?.padStart(2, "0")}` : currentDate;
+      continue;
+    }
+    const amountMatch = line.match(/^([+-])?\s*R\$\s*([\d.]+,\d{2})$/);
+    if (!amountMatch || !currentDate) continue;
+    const detail = lines[index - 1] ?? "";
+    const name = (/•/.test(detail) ? lines[index - 2] : detail)?.slice(0, 160);
+    const amount = normalizeImportedAmount(amountMatch[2]);
+    if (!name || !amount || /saldo/i.test(name)) continue;
+    const time = detail.match(/(\d{2}:\d{2})/)?.[1] ?? "";
+    transactions.push({
+      externalId: `pluxee:${currentDate}:${time}:${amount.toFixed(2)}:${name}`.slice(0, 255),
+      purchaseDate: currentDate,
+      amount,
+      name,
+      type: amountMatch[1] === "-" ? "expense" : "income",
+      categoryName: null,
+    });
+  }
+  if (!transactions.length) throw new Error("Pluxee statement has no transactions");
+  return {
+    sourceName: benefit ? `Pluxee ${benefit}` : "Pluxee",
+    // Stable per benefit so external ids deduplicate across overlapping exports.
+    sourceReference: `pluxee:${(benefit ?? "beneficio").toLowerCase()}`,
+    accountNumber: null,
+    period: deriveImportedPeriod(transactions),
+    isCreditCard: false,
+    transactions,
+  };
+}

@@ -1,6 +1,6 @@
 import { dateOnlyToSafeInstant, formatDateInBrazil } from "@openmonetis/shared/date-time";
 
-export const acceptedExtensions = ["ofx", "qfx", "xlsx"];
+export const acceptedExtensions = ["ofx", "qfx", "xlsx", "csv", "pdf"];
 
 export const accountPaymentMethods = [
   "pix",

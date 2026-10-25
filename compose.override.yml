@@ -1,4 +1,5 @@
-# Local override: build images from this fork instead of pulling upstream ghcr images.
+# Local override: build images from this fork instead of pulling upstream ghcr images,
+# and run a local Ollama model for statement import suggestions (no host install).
 services:
   migrator:
     image: openmonetis-local/openmonetis-migrator:local
@@ -6,8 +7,36 @@ services:
   api:
     image: openmonetis-local/openmonetis-api:local
     build: { context: ., target: api }
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-180000}
   recurring-worker:
     image: openmonetis-local/openmonetis-api:local
   web:
     image: openmonetis-local/openmonetis-web:local
     build: { context: ., target: web }
+
+  # Reachable only inside the compose network (no published port).
+  ollama:
+    image: docker.io/ollama/ollama:0.12.6
+    restart: unless-stopped
+    environment:
+      OLLAMA_KEEP_ALIVE: 15m
+      OLLAMA_NUM_PARALLEL: "1"
+    volumes:
+      - ollama_models:/root/.ollama
+
+  # One-shot: downloads the model into the volume on first start, then exits.
+  ollama-pull:
+    image: docker.io/ollama/ollama:0.12.6
+    restart: "no"
+    entrypoint: ["sh", "-c", "sleep 3 && ollama pull \"$$OLLAMA_MODEL\""]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+    depends_on:
+      - ollama
+
+volumes:
+  ollama_models:

@@ -108,7 +108,7 @@ export function useTransactionImportReview({
     setError(null);
     const extension = file.name.split(".").at(-1)?.toLowerCase() ?? "";
     if (!acceptedExtensions.includes(extension)) {
-      setError("Formato não suportado. Use OFX, QFX ou XLSX.");
+      setError("Formato não suportado. Use OFX, QFX, XLSX, CSV ou PDF.");
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
@@ -122,14 +122,18 @@ export function useTransactionImportReview({
       const destination = "";
       form.reset({
         destination,
-        paymentMethod: result.isCreditCard ? "credit_card" : "pix",
+        paymentMethod: result.isCreditCard
+          ? "credit_card"
+          : result.sourceName.startsWith("Pluxee")
+            ? "benefits"
+            : "pix",
         invoicePeriod: result.period?.to.slice(0, 7) ?? currentPeriod(),
       });
       setRows(
         result.transactions.map((transaction) => ({
           ...transaction,
           rowKey: crypto.randomUUID(),
-          selected: !transaction.isDuplicate,
+          selected: !transaction.isDuplicate && !transaction.isPossibleDuplicate,
           personId: defaultPersonId,
           categoryId: findCategoryByImportedName(categories, transaction),
         })),

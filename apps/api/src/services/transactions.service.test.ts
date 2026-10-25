@@ -562,7 +562,7 @@ for (const [label, fileName, contentBase64, code] of [
   ],
   [
     "unsupported",
-    "statement.csv",
+    "statement.txt",
     Buffer.from("content").toString("base64"),
     "IMPORT_FORMAT_NOT_SUPPORTED",
   ],
