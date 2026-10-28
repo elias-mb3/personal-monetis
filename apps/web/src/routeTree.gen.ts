@@ -19,6 +19,7 @@ import { Route as ChangelogRouteImport } from './routes/changelog'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as GoalsRouteImport } from './routes/goals'
 import { Route as InboxRouteImport } from './routes/inbox'
+import { Route as IncomePlansRouteImport } from './routes/income-plans'
 import { Route as NotesRouteImport } from './routes/notes'
 import { Route as PeopleRouteImport } from './routes/people'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
@@ -87,6 +88,11 @@ const GoalsRoute = GoalsRouteImport.update({
 const InboxRoute = InboxRouteImport.update({
   id: '/inbox',
   path: '/inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const IncomePlansRoute = IncomePlansRouteImport.update({
+  id: '/income-plans',
+  path: '/income-plans',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NotesRoute = NotesRouteImport.update({
@@ -198,6 +204,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/goals': typeof GoalsRoute
   '/inbox': typeof InboxRoute
+  '/income-plans': typeof IncomePlansRoute
   '/notes': typeof NotesRoute
   '/people': typeof PeopleRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -229,6 +236,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/goals': typeof GoalsRoute
   '/inbox': typeof InboxRoute
+  '/income-plans': typeof IncomePlansRoute
   '/notes': typeof NotesRoute
   '/people': typeof PeopleRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -261,6 +269,7 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/goals': typeof GoalsRoute
   '/inbox': typeof InboxRoute
+  '/income-plans': typeof IncomePlansRoute
   '/notes': typeof NotesRoute
   '/people': typeof PeopleRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -294,6 +303,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/goals'
     | '/inbox'
+    | '/income-plans'
     | '/notes'
     | '/people'
     | '/robots.txt'
@@ -325,6 +335,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/goals'
     | '/inbox'
+    | '/income-plans'
     | '/notes'
     | '/people'
     | '/robots.txt'
@@ -356,6 +367,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/goals'
     | '/inbox'
+    | '/income-plans'
     | '/notes'
     | '/people'
     | '/robots.txt'
@@ -388,6 +400,7 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   GoalsRoute: typeof GoalsRoute
   InboxRoute: typeof InboxRoute
+  IncomePlansRoute: typeof IncomePlansRoute
   NotesRoute: typeof NotesRoute
   PeopleRoute: typeof PeopleRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
@@ -479,6 +492,13 @@ declare module '@tanstack/react-router' {
       path: '/inbox'
       fullPath: '/inbox'
       preLoaderRoute: typeof InboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/income-plans': {
+      id: '/income-plans'
+      path: '/income-plans'
+      fullPath: '/income-plans'
+      preLoaderRoute: typeof IncomePlansRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/notes': {
@@ -628,6 +648,7 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   GoalsRoute: GoalsRoute,
   InboxRoute: InboxRoute,
+  IncomePlansRoute: IncomePlansRoute,
   NotesRoute: NotesRoute,
   PeopleRoute: PeopleRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,

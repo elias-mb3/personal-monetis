@@ -9,6 +9,7 @@ import {
   Landmark,
   NotebookText,
   Paperclip,
+  PieChart,
   Repeat2,
   Tag,
   Tags,
@@ -86,6 +87,13 @@ export const navSections: NavSection[] = [
         label: "Orçamentos",
         description: "Limites mensais por categoria",
         icon: <Target className="size-4" aria-hidden="true" />,
+        preservePeriod: true,
+      },
+      {
+        href: "/income-plans",
+        label: "Planejamento",
+        description: "Divisão da renda do mês por área",
+        icon: <PieChart className="size-4" aria-hidden="true" />,
         preservePeriod: true,
       },
       {

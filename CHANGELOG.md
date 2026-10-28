@@ -7,6 +7,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Unreleased]
 
+### Adicionado
+
+- Tela **Planejamento** (`/income-plans`): informe a renda do mês e divida entre áreas em % ou R$,
+  com gráfico de rosquinha, fatia "Não alocado" e cópia do mês anterior. Áreas (`/spending-areas`)
+  agrupam categorias de despesa e mostram o realizado do mês com os mesmos critérios do Orçamento;
+  áreas sem categorias, como Reserva, mostram só o planejado.
+
 ## [0.11.1] - 2026-10-21
 
 Corrige o timeout da publicação ARM64 com builds nativos por arquitetura e impede que falhas de

@@ -1854,6 +1854,109 @@ export const budgets = pgTable(
   ],
 );
 
+export const spendingAreas = pgTable(
+  "spending_areas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 60 }).notNull(),
+    color: varchar("color", { length: 20 }).notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("spending_areas_user_id_name_unique").on(table.userId, table.name),
+    uniqueIndex("spending_areas_id_user_id_unique").on(table.id, table.userId),
+  ],
+);
+
+export const spendingAreaCategories = pgTable(
+  "spending_area_categories",
+  {
+    areaId: uuid("area_id").notNull(),
+    categoryId: uuid("category_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.areaId, table.categoryId] }),
+    uniqueIndex("spending_area_categories_user_id_category_id_unique").on(
+      table.userId,
+      table.categoryId,
+    ),
+    foreignKey({
+      name: "spending_area_categories_area_id_user_id_fk",
+      columns: [table.areaId, table.userId],
+      foreignColumns: [spendingAreas.id, spendingAreas.userId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "spending_area_categories_category_id_user_id_fk",
+      columns: [table.categoryId, table.userId],
+      foreignColumns: [categories.id, categories.userId],
+    }).onDelete("cascade"),
+  ],
+);
+
+export const incomePlans = pgTable(
+  "income_plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    period: varchar("period", { length: 7 }).notNull(),
+    incomeAmount: numeric("income_amount", { precision: 12, scale: 2 }).notNull(),
+    note: text("note"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    uniqueIndex("income_plans_user_id_period_unique").on(table.userId, table.period),
+    uniqueIndex("income_plans_id_user_id_unique").on(table.id, table.userId),
+    check("income_plans_income_amount_nonnegative_check", sql`${table.incomeAmount} >= 0`),
+    check(
+      "income_plans_period_format_check",
+      sql`${table.period} ~ '^[1-9][0-9]{3}-(0[1-9]|1[0-2])$'`,
+    ),
+  ],
+);
+
+export const incomePlanAllocations = pgTable(
+  "income_plan_allocations",
+  {
+    planId: uuid("plan_id").notNull(),
+    areaId: uuid("area_id").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    amount: numeric("amount", { precision: 12, scale: 2 }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.planId, table.areaId] }),
+    foreignKey({
+      name: "income_plan_allocations_plan_id_user_id_fk",
+      columns: [table.planId, table.userId],
+      foreignColumns: [incomePlans.id, incomePlans.userId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "income_plan_allocations_area_id_user_id_fk",
+      columns: [table.areaId, table.userId],
+      foreignColumns: [spendingAreas.id, spendingAreas.userId],
+    }).onDelete("cascade"),
+    check("income_plan_allocations_amount_nonnegative_check", sql`${table.amount} >= 0`),
+  ],
+);
+
 export const goalTrackingType = pgEnum("goal_tracking_type", ["manual", "account"]);
 export const goalStatus = pgEnum("goal_status", ["active", "paused", "completed", "archived"]);
 

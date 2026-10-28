@@ -34,7 +34,9 @@
     "./recurring-transactions": "./src/recurring-transactions.ts",
     "./settlements": "./src/settlements.ts",
     "./business-calendars": "./src/business-calendars.ts",
-    "./due-date-rules": "./src/due-date-rules.ts"
+    "./due-date-rules": "./src/due-date-rules.ts",
+    "./income-plans": "./src/income-plans.ts",
+    "./spending-areas": "./src/spending-areas.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

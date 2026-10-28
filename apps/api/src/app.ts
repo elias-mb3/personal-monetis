@@ -30,6 +30,7 @@ import { externalExpensesRepository } from "./repositories/external-expenses.rep
 import { goalsRepository } from "./repositories/goals.repository";
 import { inboxRepository } from "./repositories/inbox.repository";
 import { inboxRulesRepository } from "./repositories/inbox-rules.repository";
+import { incomePlansRepository } from "./repositories/income-plans.repository";
 import { installmentsRepository } from "./repositories/installments.repository";
 import { invoicesRepository } from "./repositories/invoices.repository";
 import { notesRepository } from "./repositories/notes.repository";
@@ -50,6 +51,10 @@ import {
 } from "./repositories/recurring-transactions.repository";
 import { applicationVersion, releasesRepository } from "./repositories/releases.repository";
 import { settingsRepository } from "./repositories/settings.repository";
+import {
+  listIncomePlanAreasForUser,
+  spendingAreasRepository,
+} from "./repositories/spending-areas.repository";
 import { listTagsByIdsForUser, tagsRepository } from "./repositories/tags.repository";
 import * as transactionsRepository from "./repositories/transactions.repository";
 import { createAccountsRoute } from "./routes/accounts";
@@ -68,6 +73,7 @@ import { createExternalExpensesRoute } from "./routes/external-expenses";
 import { createGoalsRoute } from "./routes/goals";
 import { createCompanionInboxRoute, createInboxRoute } from "./routes/inbox";
 import { createInboxRulesRoute } from "./routes/inbox-rules";
+import { createIncomePlansRoute } from "./routes/income-plans";
 import { createInstallmentsRoute } from "./routes/installments";
 import { createInvoicesRoute } from "./routes/invoices";
 import { createNotesRoute } from "./routes/notes";
@@ -80,6 +86,7 @@ import { createRecurringExpensesRoute } from "./routes/recurring-expenses";
 import { createRecurringTransactionsRoute } from "./routes/recurring-transactions";
 import { createReleasesRoute } from "./routes/releases";
 import { createSettingsRoute } from "./routes/settings";
+import { createSpendingAreasRoute } from "./routes/spending-areas";
 import { createTagsRoute } from "./routes/tags";
 import { createTransactionsRoute } from "./routes/transactions";
 import { createAccountsService } from "./services/accounts.service";
@@ -104,6 +111,7 @@ import {
 import { createGoalsService } from "./services/goals.service";
 import { createInboxService } from "./services/inbox.service";
 import { createInboxRulesService } from "./services/inbox-rules.service";
+import { createIncomePlansService } from "./services/income-plans.service";
 import { createInstallmentsService } from "./services/installments.service";
 import { createInvoicesService } from "./services/invoices.service";
 import { createNotesService } from "./services/notes.service";
@@ -116,6 +124,7 @@ import { createRecurringExpensesService } from "./services/recurring-expenses.se
 import { createRecurringTransactionsService } from "./services/recurring-transactions.service";
 import { createReleasesService } from "./services/releases.service";
 import { createSettingsService } from "./services/settings.service";
+import { createSpendingAreasService } from "./services/spending-areas.service";
 import { createTagsService } from "./services/tags.service";
 import { createTransactionsService } from "./services/transactions.service";
 import type { ApiVariables } from "./types/context";
@@ -150,6 +159,16 @@ const cardsRoute = createCardsRoute(
 );
 const budgetsService = createBudgetsService(budgetsRepository, categoriesRepository);
 const budgetsRoute = createBudgetsRoute(budgetsService);
+const spendingAreasRoute = createSpendingAreasRoute(
+  createSpendingAreasService(spendingAreasRepository, categoriesRepository),
+);
+const incomePlansRoute = createIncomePlansRoute(
+  createIncomePlansService(
+    incomePlansRepository,
+    { listAreasForUser: listIncomePlanAreasForUser },
+    budgetsRepository,
+  ),
+);
 const goalsRoute = createGoalsRoute(createGoalsService(goalsRepository, accountsService));
 const billsService = createBillsService(billsRepository, undefined, dueDateRulesRepository);
 const billsRoute = createBillsRoute(billsService);
@@ -347,6 +366,14 @@ app.use("/budgets", privateCache);
 app.use("/budgets/*", privateCache);
 app.use("/budgets", requireAuth);
 app.use("/budgets/*", requireAuth);
+app.use("/spending-areas", privateCache);
+app.use("/spending-areas/*", privateCache);
+app.use("/spending-areas", requireAuth);
+app.use("/spending-areas/*", requireAuth);
+app.use("/income-plans", privateCache);
+app.use("/income-plans/*", privateCache);
+app.use("/income-plans", requireAuth);
+app.use("/income-plans/*", requireAuth);
 app.use("/goals", privateCache);
 app.use("/goals/*", privateCache);
 app.use("/goals", requireAuth);
@@ -592,6 +619,8 @@ app.route("/api/auth/device", companionDeviceRoute);
 app.route("/accounts", accountsRoute);
 app.route("/cards", cardsRoute);
 app.route("/budgets", budgetsRoute);
+app.route("/spending-areas", spendingAreasRoute);
+app.route("/income-plans", incomePlansRoute);
 app.route("/goals", goalsRoute);
 app.route("/bills", billsRoute);
 app.route("/categories", categoriesRoute);
